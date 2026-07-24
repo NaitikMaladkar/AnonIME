@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    IME metadata — declared in <application> via android.view.im meta-data.
+    Switches off any personalized learning at the subsystem level.
+-->
+<input-method xmlns:android="http://schemas.android.com/apk/res/android"
+    android:isDefault="@bool/ime_is_default"
+    android:supportsSwitchingToNextInputMethod="true"
+    android:supportsInlineSuggestions="false">
+
+    <!--
+        supportsInlineSuggestions=false — we never accept inline autofill
+        suggestions, which removes another data-exfiltration path.
+    -->
+
+    <subtype
+        android:label="@string/subtype_en_US"
+        android:imeSubtypeLocale="en_US"
+        android:imeSubtypeMode="keyboard" />
+</input-method>

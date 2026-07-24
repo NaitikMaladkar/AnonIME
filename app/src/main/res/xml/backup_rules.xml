@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+        Anonymous-typing: back up NOTHING. If the user reinstalls or migrates
+        devices, no keyboard state ships to Google backup servers.
+    -->
+</full-backup-content>

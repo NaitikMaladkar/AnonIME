@@ -1,0 +1,49 @@
+# ── Android / Gradle ───────────────────────────────────────────────
+.gradle/
+build/
+/local.properties
+.idea/
+.DS_Store
+captures/
+.cxx/
+
+# ── Keystore (NEVER commit) ───────────────────────────────────────
+*.jks
+*.keystore
+keystore.properties
+
+# ── Kotlin ─────────────────────────────────────────────────────────
+*.kotlin_metadata
+*.kotlin_builtins
+
+# ── Logs / temp ────────────────────────────────────────────────────
+*.log
+*.iml
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ── Native ─────────────────────────────────────────────────────────
+*.so
+*.dylib
+*.dll
+
+# ── OS junk ────────────────────────────────────────────────────────
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ── Editor ─────────────────────────────────────────────────────────
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Secrets ────────────────────────────────────────────────────────
+secrets.properties
+local.secrets
+*.token
+.env

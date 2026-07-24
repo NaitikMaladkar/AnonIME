@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AnonIME is never the system default IME on install; user must opt in. -->
+    <bool name="ime_is_default">false</bool>
+</resources>

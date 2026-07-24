@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Anonymous-Typing Guarantees (Phase 1):
+          * No INTERNET permission — keyboard code cannot phone home.
+          * No ACCESS_NETWORK_STATE — no network observation.
+          * No READ/WRITE_CONTACTS — no dictionary ingestion from system.
+          * No RECORD_AUDIO / microphone — no voice input (Phase 1).
+          * No storage permissions — no input history persistence.
+        The keyboard code paths have zero network capability by construction.
+    -->
+
+    <application
+        android:name=".AnonIMEApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AnonIME"
+        android:usesCleartextTraffic="false"
+        tools:targetApi="31">
+
+        <!-- Launcher Activity — onboarding to enable IME + set as default -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AnonIME">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            The InputMethodService.
+            - exported=true: required by the system IMMS to bind.
+            - permission BIND_INPUT_METHOD: only the system can bind.
+            - No exported pickers, no content providers — minimal surface.
+        -->
+        <service
+            android:name=".ime.AnonIMEService"
+            android:exported="true"
+            android:label="@string/ime_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+    </application>
+
+</manifest>
