@@ -13,11 +13,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
+import androidx.compose.material.icons.automirrored.filled.KeyboardTab
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.KeyboardCapslock
-import androidx.compose.material.icons.filled.KeyboardTab
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,12 +60,12 @@ sealed interface EnterActionSpec {
 
     data object Send : EnterActionSpec {
         override val label: String? = "Send"
-        override val icon: ImageVector? = Icons.Outlined.Send
+        override val icon: ImageVector? = Icons.AutoMirrored.Outlined.Send
     }
 
     data object Next : EnterActionSpec {
         override val label: String? = null
-        override val icon: ImageVector? = Icons.Filled.KeyboardTab
+        override val icon: ImageVector? = Icons.AutoMirrored.Filled.KeyboardTab
     }
 
     data object Done : EnterActionSpec {
@@ -235,9 +235,10 @@ private fun ShiftIcon(shift: ShiftState, tint: Color) {
 
 @Composable
 private fun EnterContent(spec: EnterActionSpec, tint: Color) {
-    if (spec.icon != null) {
+    val icon = spec.icon
+    if (icon != null) {
         Icon(
-            imageVector = spec.icon,
+            imageVector = icon,
             contentDescription = spec.label ?: "Enter",
             tint = tint,
         )

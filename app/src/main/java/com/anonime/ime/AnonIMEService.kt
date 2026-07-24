@@ -132,7 +132,7 @@ class AnonIMEService : InputMethodService() {
             KeyAction.Enter -> {
                 // Phase 1: send IME action if present, otherwise newline.
                 val editorInfo = currentInputEditorInfo
-                val actionId = editorInfo?.imeOptions and EditorInfo.IME_MASK_ACTION
+                val actionId = (editorInfo?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
                 val handled = when (actionId) {
                     EditorInfo.IME_ACTION_DONE,
                     EditorInfo.IME_ACTION_GO,

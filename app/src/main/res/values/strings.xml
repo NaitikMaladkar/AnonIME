@@ -37,6 +37,6 @@
     <string name="key_backspace">Backspace</string>
     <string name="key_space">Space</string>
     <string name="key_enter">Enter</string>
-    <string name="key_symbols">?123</string>
+    <string name="key_symbols">\?123</string>
     <string name="key_abc">ABC</string>
 </resources>
