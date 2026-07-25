@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -95,9 +96,15 @@ fun KeyboardScreen(
     onAction: (KeyAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The IME adds this view with MATCH_PARENT × WRAP_CONTENT, so the root
+    // Surface must have a definite intrinsic height. We use wrapContentHeight
+    // so the Column of fixed-height rows (each 46.dp) determines the height
+    // — never fillMaxHeight (which is 0 under WRAP_CONTENT) and never
+    // fillMaxSize (same problem).
     Surface(
         modifier = modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .wrapContentHeight(align = Alignment.Top),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Column(

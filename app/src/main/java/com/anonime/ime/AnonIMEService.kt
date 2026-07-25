@@ -3,59 +3,75 @@ package com.anonime.ime
 import android.inputmethodservice.InputMethodService
 import android.os.SystemClock
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ServiceLifecycleDispatcher
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.anonime.ui.theme.AnonIMETheme
 
 /**
  * The IME service.
  *
  * Responsibilities:
- *   1. Host a Compose view tree that renders [KeyboardScreen].
+ *   1. Host a Compose view tree (via [AnonKeyboardView]) that renders [KeyboardScreen].
  *   2. Translate [KeyAction]s into InputConnection commits.
  *   3. Maintain [KeyboardUiState] (shift state, enter action).
  *
- * Why this service implements [LifecycleOwner] + [SavedStateRegistryOwner]:
- *   Compose's [ComposeView] pulls a LifecycleOwner and SavedStateRegistryOwner
- *   from its ViewTree at attach time. If either is missing the composition
- *   never starts — the view measures 0×0 and the system thinks the IME is
- *   "shown" while the user sees nothing. That's the lock-in failure mode.
- *   By being our own owner and dispatching lifecycle events, the ComposeView
- *   has a valid lifecycle and renders normally.
+ * ── Why this service implements THREE owners ─────────────────────────────────
+ * Compose's [AbstractComposeView] looks up THREE ViewTree owners at attach
+ * time via `findViewTreeXxxOwner()`:
+ *   1. LifecycleOwner            — required, else crash
+ *   2. SavedStateRegistryOwner   — required, else crash
+ *   3. ViewModelStoreOwner       — optional at attach, but required the moment
+ *                                  any `viewModel()` or retained state is used
  *
- * Anonymous-typing guarantees (Phase 1):
+ * An `InputMethodService` is NOT any of these by default. We implement all
+ * three and wire them into the IME window's `decorView` (NOT into the
+ * ComposeView itself) so every descendant view can find them. Setting on the
+ * ComposeView is fragile because `setInputView()` re-parents the view.
+ *
+ * ── Lifecycle dispatch via ServiceLifecycleDispatcher ────────────────────────
+ * The Recomposer only runs its effect loop when the lifecycle is at least
+ * `STARTED`. If we only dispatch `ON_CREATE` (in `onCreate`), the composition
+ * is created but never produces frames — the keyboard renders 0×0 and the
+ * user appears "locked" because the system thinks the IME is shown.
+ *
+ * `ServiceLifecycleDispatcher.onServicePreSuperOnBind()` dispatches `ON_START`
+ * for us, and `onBindInput()` is called by the IMMS BEFORE `onCreateInputView()`.
+ * This guarantees the lifecycle is `STARTED` by the time the ComposeView
+ * attaches and tries to start its Recomposer.
+ *
+ * ── Anonymous-typing guarantees (Phase 1) ─────────────────────────────────────
  *   - No network calls. The manifest declares no INTERNET permission, so
  *     even if some future code path attempted one, the OS would block it.
  *   - No persistence. We do not write any user input to disk, SharedPreferences,
  *     or databases. State lives in-memory only.
  *   - No personal dictionary learning. We do not maintain a user dictionary
  *     and explicitly respect IME_FLAG_NO_PERSONALIZED_LEARNING.
- *   - No input history. The transient buffers are wiped immediately after
- *     commit and on [onFinishInput].
+ *   - No input history. Transient buffers are wiped immediately after commit
+ *     and on [onFinishInput].
  */
 class AnonIMEService :
     InputMethodService(),
     LifecycleOwner,
+    ViewModelStoreOwner,
     SavedStateRegistryOwner {
 
     // ── Compose state ──────────────────────────────────────────────────────────
-    private var uiState: MutableState<KeyboardUiState> =
+    private val uiState: MutableState<KeyboardUiState> =
         mutableStateOf(KeyboardUiState())
-    private var composeView: ComposeView? = null
+    private var keyboardView: AnonKeyboardView? = null
 
     // ── Anonymous-typing state ──────────────────────────────────────────────────
     /**
@@ -64,28 +80,38 @@ class AnonIMEService :
      * this is true (we never learn anything), but we honor it explicitly so
      * password fields and similar contexts know we respect the flag.
      */
+    @Suppress("unused")
     private var incognito: Boolean = true
 
     /** Wall-clock of the last input event — for diagnostics only, never stored. */
+    @Suppress("unused")
     private var lastEventUptime: Long = 0L
 
-    // ── Lifecycle + SavedState plumbing for ComposeView ─────────────────────────
+    // ── Owner #1: LifecycleOwner ───────────────────────────────────────────────
     /**
-     * Backing registry for [LifecycleOwner]. Driven by IME callbacks:
-     *   - onCreate -> ON_CREATE
-     *   - onCreateInputView (after attach) -> ON_START, then ON_RESUME
-     *   - onHideWindow -> ON_PAUSE, then ON_STOP
-     *   - onDestroy -> ON_DESTROY
-     *
-     * We do NOT move to RESUME until the input view is actually attached —
-     * otherwise Compose thinks it's foregrounded while it isn't on screen.
+     * `ServiceLifecycleDispatcher` from `androidx.lifecycle:lifecycle-service`.
+     * Dispatches lifecycle events for a Service in the correct order:
+     *   - onCreate  -> ON_CREATE
+     *   - onBind    -> ON_START          ← critical for Compose's Recomposer
+     *   - onDestroy -> ON_STOP, ON_DESTROY
      */
-    private val lifecycleRegistry: LifecycleRegistry = LifecycleRegistry(this)
+    private val lifecycleDispatcher = ServiceLifecycleDispatcher(this)
 
     override val lifecycle: Lifecycle
-        get() = lifecycleRegistry
+        get() = lifecycleDispatcher.lifecycle
 
-    private val savedStateRegistryController: SavedStateRegistryController =
+    // ── Owner #2: ViewModelStoreOwner ──────────────────────────────────────────
+    /**
+     * Empty ViewModelStore — we don't use ViewModels in Phase 1, but Compose's
+     * `viewModel()` machinery requires a non-null owner if anything ever calls it.
+     * The store is cleared on service destroy to avoid leaks.
+     */
+    private val _viewModelStore = ViewModelStore()
+    override val viewModelStore: ViewModelStore
+        get() = _viewModelStore
+
+    // ── Owner #3: SavedStateRegistryOwner ─────────────────────────────────────
+    private val savedStateRegistryController =
         SavedStateRegistryController.create(this)
 
     override val savedStateRegistry: SavedStateRegistry
@@ -93,67 +119,71 @@ class AnonIMEService :
 
     // ── Service lifecycle ───────────────────────────────────────────────────────
     override fun onCreate() {
+        // Dispatch ON_CREATE BEFORE super.onCreate — ServiceLifecycleDispatcher
+        // posts to the main thread at front-of-queue, so observers see the
+        // state transition before any subsequent IME callbacks run.
+        lifecycleDispatcher.onServicePreSuperOnCreate()
         super.onCreate()
+        // Initialize SavedStateRegistry with no persisted state — preserves
+        // the anonymous-typing guarantee (we never restore any user data).
         savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+    }
+
+    override fun onBindInput() {
+        // Dispatch ON_START BEFORE super.onBindInput. This is the critical
+        // event — without it, the Recomposer created by the ComposeView will
+        // be parked in CREATED state and never produce frames.
+        lifecycleDispatcher.onServicePreSuperOnBind()
+        super.onBindInput()
     }
 
     override fun onDestroy() {
-        // Tear down Compose before destroying lifecycle — order matters.
-        composeView?.disposeComposition()
-        composeView = null
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        // Dispatch ON_STOP + ON_DESTROY before super, then clear the
+        // ViewModelStore so any ViewModels held by retained composables
+        // receive onCleared().
+        lifecycleDispatcher.onServicePreSuperOnDestroy()
+        _viewModelStore.clear()
+        keyboardView?.disposeComposition()
+        keyboardView = null
         super.onDestroy()
     }
 
     // ── Input view lifecycle ────────────────────────────────────────────────────
     override fun onCreateInputView(): View {
-        // The IME provides the Service context. Use applicationContext for any
-        // long-lived references so we don't leak Activity-bound resources.
-        val view = ComposeView(this).apply {
-            // Dispose when the view's lifecycle owner is destroyed — i.e. when
-            // the IME itself is torn down.
-            setViewCompositionStrategy(
-                ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-            )
+        // Construct the Compose host view using the SERVICE context (not
+        // applicationContext) — the service context has the IME's theme and
+        // resources, which Compose needs to resolve Material colors.
+        val view = AnonKeyboardView(
+            context = this,
+            state = uiState,
+            onAction = ::handleKeyAction,
+        )
 
-            // Critical: wire the ViewTree owners BEFORE setContent. Compose reads
-            // them at attach; if they're null at that moment the composition
-            // silently skips and nothing renders (this was the original bug).
-            this.setViewTreeLifecycleOwner(this@AnonIMEService)
-            this.setViewTreeSavedStateRegistryOwner(this@AnonIMEService)
-
-            setContent {
-                AnonIMETheme {
-                    val state by uiState
-                    KeyboardScreen(
-                        state = state,
-                        onAction = ::handleKeyAction,
-                    )
-                }
-            }
-
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            )
+        // CRITICAL: wire ViewTree owners on the IME window's decorView, NOT
+        // on the ComposeView. The IME's setInputView() re-parents the
+        // returned view into mInputFrame, which can clear ViewTree tags set
+        // on the view itself. Setting on decorView (the root of the entire
+        // IME window) guarantees every descendant finds the owners via
+        // findViewTreeXxxOwner().
+        //
+        // window  -> SoftInputWindow (a Dialog subclass)
+        // .window -> the underlying Window
+        // .decorView -> root View of the window
+        val decorView = window?.window?.decorView
+        if (decorView != null) {
+            decorView.setViewTreeLifecycleOwner(this)
+            decorView.setViewTreeViewModelStoreOwner(this)
+            decorView.setViewTreeSavedStateRegistryOwner(this)
+        } else {
+            // Fallback: set on the view itself. This works in most cases but
+            // is fragile if the IME re-parents the view.
+            view.setViewTreeLifecycleOwner(this)
+            view.setViewTreeViewModelStoreOwner(this)
+            view.setViewTreeSavedStateRegistryOwner(this)
         }
-        composeView = view
+
+        keyboardView = view
         return view
-    }
-
-    override fun onWindowShown() {
-        super.onWindowShown()
-        // Input view is on screen — bring lifecycle up to RESUMED.
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-    }
-
-    override fun onWindowHidden() {
-        super.onWindowHidden()
-        // Input view is leaving the screen — drop back to CREATED.
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }
 
     override fun onStartInput(attribute: EditorInfo, restarting: Boolean) {
@@ -173,7 +203,6 @@ class AnonIMEService :
     override fun onFinishInput() {
         super.onFinishInput()
         // Anonymous-typing: drop any state that could be construed as input history.
-        // We hold no text buffer in Phase 1, but be explicit in case Phase 2 adds one.
         uiState.value = uiState.value.copy(shift = ShiftState.Off)
     }
 
@@ -184,17 +213,6 @@ class AnonIMEService :
      * it stops dispatching window visibility — a contributor to "stuck IME".
      */
     override fun onEvaluateInputViewShown(): Boolean = true
-
-    /**
-     * Back-key fallback. If the IME is shown and the user presses the back
-     * button, the default behavior is to hide the IME. We don't override
-     * this here — the default is correct — but we keep the override as a
-     * documented guarantee that back always dismisses the keyboard.
-     *
-     * The user-reported "locked" failure was actually caused by the keyboard
-     * never rendering in the first place (Compose had no lifecycle), not by
-     * a back-key bug. Once we render properly, back works as expected.
-     */
 
     // ── Action dispatch ─────────────────────────────────────────────────────────
     private fun handleKeyAction(action: KeyAction) {

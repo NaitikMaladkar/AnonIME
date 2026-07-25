@@ -58,6 +58,8 @@ dependencies {
     // Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel)
+    implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.savedstate)
@@ -72,4 +74,7 @@ dependencies {
 
     // Debug tooling only
     debugImplementation(libs.androidx.ui.tooling)
+
+    // Unit tests
+    testImplementation("junit:junit:4.13.2")
 }
