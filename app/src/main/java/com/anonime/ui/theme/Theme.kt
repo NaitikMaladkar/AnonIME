@@ -21,6 +21,8 @@ private val LightColors = lightColorScheme(
     onSecondaryContainer = md_light_onSecondaryContainer,
     tertiary = md_light_tertiary,
     onTertiary = md_light_onTertiary,
+    tertiaryContainer = md_light_tertiaryContainer,
+    onTertiaryContainer = md_light_onTertiaryContainer,
     background = md_light_background,
     onBackground = md_light_onBackground,
     surface = md_light_surface,
@@ -28,6 +30,10 @@ private val LightColors = lightColorScheme(
     surfaceVariant = md_light_surfaceVariant,
     onSurfaceVariant = md_light_onSurfaceVariant,
     outline = md_light_outline,
+    error = md_light_error,
+    onError = md_light_onError,
+    errorContainer = md_light_errorContainer,
+    onErrorContainer = md_light_onErrorContainer,
 )
 
 private val DarkColors = darkColorScheme(
@@ -41,6 +47,8 @@ private val DarkColors = darkColorScheme(
     onSecondaryContainer = md_dark_onSecondaryContainer,
     tertiary = md_dark_tertiary,
     onTertiary = md_dark_onTertiary,
+    tertiaryContainer = md_dark_tertiaryContainer,
+    onTertiaryContainer = md_dark_onTertiaryContainer,
     background = md_dark_background,
     onBackground = md_dark_onBackground,
     surface = md_dark_surface,
@@ -48,17 +56,21 @@ private val DarkColors = darkColorScheme(
     surfaceVariant = md_dark_surfaceVariant,
     onSurfaceVariant = md_dark_onSurfaceVariant,
     outline = md_dark_outline,
+    error = md_dark_error,
+    onError = md_dark_onError,
+    errorContainer = md_dark_errorContainer,
+    onErrorContainer = md_dark_onErrorContainer,
 )
 
 /**
- * Theme entry point.
+ * Theme entry point. Used by both the settings Activity AND the IME
+ * Compose host view, so the keyboard visually matches the rest of the
+ * device.
  *
- * @param darkTheme  Whether to render in dark mode. Defaults to system setting.
+ * @param darkTheme  Whether to render in dark mode. Caller passes the user's
+ *                   resolved preference (System/Light/Dark).
  * @param dynamic    Whether to use Material You dynamic color (API 31+).
  *                   Falls back to the seed palette below 31 or when [dynamic] is false.
- *
- * Used by both the onboarding Activity AND the IME Compose host view, so the
- * keyboard visually matches the rest of the device without a separate theme.
  */
 @Composable
 fun AnonIMETheme(
@@ -78,6 +90,7 @@ fun AnonIMETheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AnonIMETypography,
+        shapes = AnonIMEShapes,
         content = content,
     )
 }

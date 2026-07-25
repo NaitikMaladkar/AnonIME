@@ -3,35 +3,6 @@
     <string name="ime_name">AnonIME Keyboard</string>
     <string name="subtype_en_US">English (US)</string>
 
-    <!-- Onboarding -->
-    <string name="onboarding_title">AnonIME</string>
-    <string name="onboarding_subtitle">A privacy-first keyboard. Nothing leaves your device.</string>
-
-    <string name="step_enable_title">1. Enable AnonIME</string>
-    <string name="step_enable_desc">Open Android system settings and toggle on AnonIME Keyboard.</string>
-    <string name="step_enable_button">Open system settings</string>
-
-    <string name="step_default_title">2. Set as default</string>
-    <string name="step_default_desc">Select AnonIME as your active input method.</string>
-    <string name="step_default_button">Choose keyboard</string>
-
-    <string name="step_done_title">Ready to type</string>
-    <string name="step_done_desc">AnonIME is enabled. Tap any text field and start typing.</string>
-
-    <!-- Privacy card -->
-    <string name="privacy_title">Privacy guarantees</string>
-    <string name="privacy_bullet_1">No INTERNET permission — keyboard cannot send data anywhere.</string>
-    <string name="privacy_bullet_2">No personalized learning — your typing is never stored.</string>
-    <string name="privacy_bullet_3">No input history — buffers are cleared after each commit.</string>
-    <string name="privacy_bullet_4">Respects IME_FLAG_NO_PERSONALIZED_LEARNING explicitly.</string>
-    <string name="privacy_bullet_5">Nothing backed up to cloud or device transfer.</string>
-
-    <!-- Status -->
-    <string name="status_enabled">AnonIME enabled</string>
-    <string name="status_disabled">AnonIME not enabled yet</string>
-    <string name="status_default">AnonIME is the active keyboard</string>
-    <string name="status_not_default">Another keyboard is active</string>
-
     <!-- Keys -->
     <string name="key_shift">Shift</string>
     <string name="key_backspace">Backspace</string>

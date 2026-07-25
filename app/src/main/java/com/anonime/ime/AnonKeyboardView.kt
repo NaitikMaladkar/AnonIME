@@ -1,10 +1,15 @@
 package com.anonime.ime
 
 import android.content.Context
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import com.anonime.data.SettingsRepository
+import com.anonime.data.ThemeMode
 import com.anonime.ui.theme.AnonIMETheme
 
 /**
@@ -27,15 +32,14 @@ class AnonKeyboardView(
     private val onAction: (KeyAction) -> Unit,
 ) : AbstractComposeView(context) {
 
+    private val settingsRepo = SettingsRepository.get(context)
+
     init {
         // Dispose the composition when the ViewTree's LifecycleOwner reaches
         // DESTROYED — i.e. when the IME service is destroyed. This is the
         // safest strategy for an IME because the input view can be re-attached
         // multiple times across show/hide cycles within the same service
         // lifetime, and we want the composition to survive those re-attaches.
-        // DisposeOnViewTreeLifecycleDestroyed looks up the LifecycleOwner from
-        // the ViewTree at dispose time — which works because we wire the
-        // owners on the IME window's decorView in AnonIMEService.onCreateInputView.
         setViewCompositionStrategy(
             ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
         )
@@ -50,13 +54,24 @@ class AnonKeyboardView(
 
     @Composable
     override fun Content() {
-        AnonIMETheme {
+        // Read the latest settings — recomposes when the user changes a
+        // toggle in the settings Activity (same process, shared StateFlow).
+        val settings by settingsRepo.state.collectAsState()
+
+        // Resolve theme preference into a concrete dark/light value.
+        val darkTheme = when (settings.themeMode) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+        }
+
+        AnonIMETheme(darkTheme = darkTheme, dynamic = settings.dynamicColor) {
             val current = state.value
             KeyboardScreen(
                 state = current,
                 onAction = onAction,
+                keyHeightDp = settings.keyHeight.dp,
             )
         }
     }
 }
-

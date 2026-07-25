@@ -89,18 +89,17 @@ data class KeyboardUiState(
  * Stateless on purpose: all state lives in the parent (the IME service via
  * Compose state holders). The [onAction] callback fires whenever the user
  * taps a key.
+ *
+ * @param keyHeightDp Per-row height in dp. Driven by the user's Appearance
+ * setting (compact / normal / tall).
  */
 @Composable
 fun KeyboardScreen(
     state: KeyboardUiState,
     onAction: (KeyAction) -> Unit,
     modifier: Modifier = Modifier,
+    keyHeightDp: Int = 46,
 ) {
-    // The IME adds this view with MATCH_PARENT × WRAP_CONTENT, so the root
-    // Surface must have a definite intrinsic height. We use wrapContentHeight
-    // so the Column of fixed-height rows (each 46.dp) determines the height
-    // — never fillMaxHeight (which is 0 under WRAP_CONTENT) and never
-    // fillMaxSize (same problem).
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -119,6 +118,7 @@ fun KeyboardScreen(
                     row = row,
                     state = state,
                     onAction = onAction,
+                    keyHeightDp = keyHeightDp,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -131,6 +131,7 @@ private fun KeyRowView(
     row: KeyRow,
     state: KeyboardUiState,
     onAction: (KeyAction) -> Unit,
+    keyHeightDp: Int,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -143,6 +144,7 @@ private fun KeyRowView(
                 key = key,
                 state = state,
                 onAction = onAction,
+                keyHeightDp = keyHeightDp,
                 modifier = Modifier.weight(key.width),
             )
         }
@@ -154,6 +156,7 @@ private fun KeyView(
     key: Key,
     state: KeyboardUiState,
     onAction: (KeyAction) -> Unit,
+    keyHeightDp: Int,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -175,7 +178,7 @@ private fun KeyView(
         contentColor = fg,
         shape = RoundedCornerShape(8.dp),
         modifier = modifier
-            .height(46.dp)
+            .height(keyHeightDp.dp)
             .imeKeyClickable { key.action?.let(onAction) },
     ) {
         Box(
