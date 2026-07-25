@@ -71,6 +71,7 @@ class AnonKeyboardView(
                 state = current,
                 onAction = onAction,
                 keyHeightDp = settings.keyHeight.dp,
+                longPressAccents = settings.longPressAccents,
             )
         }
     }

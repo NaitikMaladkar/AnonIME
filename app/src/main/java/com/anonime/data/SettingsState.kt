@@ -44,9 +44,9 @@ data class SettingsState(
     val dynamicColor: Boolean = true,
     val keyHeight: KeyHeight = KeyHeight.NORMAL,
 
-    // ── Typing (stubs for now — toggles save but don't yet affect the keyboard) ─
+    // ── Typing (Phase 2: longPressAccents is now functional; the rest are stubs) ─
     val keyPopupPreview: Boolean = true,
-    val longPressAccents: Boolean = false,
+    val longPressAccents: Boolean = true,
     val autoCapitalize: Boolean = true,
     val soundEnabled: Boolean = false,
     val hapticEnabled: Boolean = false,

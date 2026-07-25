@@ -2,7 +2,9 @@ package com.anonime.ime
 
 import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -60,12 +62,25 @@ class KeyboardModelTest {
     }
 
     @Test
-    fun `bottom row has 5 keys with correct weights`() {
+    fun `bottom row has 6 keys including a globe key`() {
+        // Phase 2: bottom row gained a globe key between comma and space.
+        // New weights: ?123(1.0) + ,(1.0) + globe(1.0) + space(4.5) + .(1.0) + enter(1.5) = 10.0
         val row = KeyDefinitions.bottomRow
-        assertEquals(5, row.keys.size)
+        assertEquals(6, row.keys.size)
         val totalWeight = row.keys.sumOf { it.width.toDouble() }
-        // Should sum to 10.0 (1.5 + 1.0 + 5.0 + 1.0 + 1.5)
         assertEquals(10.0, totalWeight, 0.001)
+
+        // The globe key must be present, with the Globe visual, and target Emojis.
+        val globeKey = row.keys.first { it.visual == KeyVisual.Globe }
+        assertEquals("globe", globeKey.label)
+        assertEquals(KeyAction.SwitchLayout(LayoutKind.Emojis), globeKey.action)
+
+        // The ?123 toggle key is still first.
+        assertEquals("?123", row.keys.first().label)
+        assertEquals(KeyVisual.Symbols, row.keys.first().visual)
+
+        // The enter key is still last.
+        assertEquals(KeyVisual.Enter, row.keys.last().visual)
     }
 
     @Test
@@ -206,6 +221,14 @@ class KeyboardModelTest {
     }
 
     @Test
+    fun `every emoji row has weights summing to 10`() {
+        KeyDefinitions.emojisLayout.forEachIndexed { idx, row ->
+            val total = row.keys.sumOf { it.width.toDouble() }
+            assertEquals("Emoji row $idx weights do not sum to 10", 10.0, total, 0.001)
+        }
+    }
+
+    @Test
     fun `every text key in symbols layouts commits a Character action`() {
         val allKeys = (KeyDefinitions.symbols1Layout + KeyDefinitions.symbols2Layout)
             .flatMap { it.keys }
@@ -225,16 +248,18 @@ class KeyboardModelTest {
         assertEquals(KeyDefinitions.lettersLayout, keyboardLayoutFor(LayoutKind.Letters))
         assertEquals(KeyDefinitions.symbols1Layout, keyboardLayoutFor(LayoutKind.Symbols1))
         assertEquals(KeyDefinitions.symbols2Layout, keyboardLayoutFor(LayoutKind.Symbols2))
+        assertEquals(KeyDefinitions.emojisLayout, keyboardLayoutFor(LayoutKind.Emojis))
     }
 
     @Test
     fun `every layout-toggle key points to a valid LayoutKind`() {
         // Walk every SwitchLayout key in every layout and verify the target
-        // is one of the three valid LayoutKinds. This catches typos like
+        // is one of the four valid LayoutKinds. This catches typos like
         // accidentally switching to a removed `Symbols` enum value.
         val allKeys = (KeyDefinitions.lettersLayout +
                 KeyDefinitions.symbols1Layout +
-                KeyDefinitions.symbols2Layout)
+                KeyDefinitions.symbols2Layout +
+                KeyDefinitions.emojisLayout)
             .flatMap { it.keys }
         val validKinds = LayoutKind.entries.toSet()
         allKeys.forEach { key ->
@@ -254,13 +279,20 @@ class KeyboardModelTest {
         //   Letters  <-> Symbols1  (via ?123 / ABC)
         //   Symbols1 <-> Symbols2  (via =\< / ?123)
         //   Letters  <-> Symbols2  (via ABC on Symbols2, but no direct key from Letters)
+        //   Letters  <-> Emojis    (via globe / ABC)  ← Phase 2
+        //   Symbols1 <-> Emojis    (via globe / ABC)  ← Phase 2
+        //   Symbols2 <-> Emojis    (via globe / ABC)  ← Phase 2
+        //
         // The minimum requirement: every non-Letters layout has an ABC key
-        // that returns to Letters, and Symbols1 has a key to Symbols2 and vice versa.
+        // that returns to Letters, Symbols1 has a key to Symbols2 and vice versa,
+        // and every bottom row has a globe key that goes to Emojis.
         val lettersToggles = KeyDefinitions.lettersLayout.flatMap { it.keys }
             .filter { it.action is KeyAction.SwitchLayout }
             .map { (it.action as KeyAction.SwitchLayout).kind }
         assertTrue("Letters layout must have a toggle to Symbols1",
             LayoutKind.Symbols1 in lettersToggles)
+        assertTrue("Letters layout must have a toggle to Emojis (via globe key)",
+            LayoutKind.Emojis in lettersToggles)
 
         val symbols1Toggles = KeyDefinitions.symbols1Layout.flatMap { it.keys }
             .filter { it.action is KeyAction.SwitchLayout }
@@ -269,6 +301,8 @@ class KeyboardModelTest {
             LayoutKind.Letters in symbols1Toggles)
         assertTrue("Symbols1 layout must have a toggle to Symbols2",
             LayoutKind.Symbols2 in symbols1Toggles)
+        assertTrue("Symbols1 layout must have a toggle to Emojis (via globe key)",
+            LayoutKind.Emojis in symbols1Toggles)
 
         val symbols2Toggles = KeyDefinitions.symbols2Layout.flatMap { it.keys }
             .filter { it.action is KeyAction.SwitchLayout }
@@ -277,5 +311,155 @@ class KeyboardModelTest {
             LayoutKind.Letters in symbols2Toggles)
         assertTrue("Symbols2 layout must have a toggle back to Symbols1",
             LayoutKind.Symbols1 in symbols2Toggles)
+        assertTrue("Symbols2 layout must have a toggle to Emojis (via globe key)",
+            LayoutKind.Emojis in symbols2Toggles)
+
+        val emojisToggles = KeyDefinitions.emojisLayout.flatMap { it.keys }
+            .filter { it.action is KeyAction.SwitchLayout }
+            .map { (it.action as KeyAction.SwitchLayout).kind }
+        assertTrue("Emojis layout must have a toggle back to Letters (via ABC key)",
+            LayoutKind.Letters in emojisToggles)
+    }
+
+    // ── Emoji panel tests ──────────────────────────────────────────────────────
+
+    @Test
+    fun `emojis layout has 9 rows`() {
+        // 8 emoji rows + 1 bottom row = 9 total.
+        assertEquals(9, KeyDefinitions.emojisLayout.size)
+    }
+
+    @Test
+    fun `every emoji row has exactly 10 keys`() {
+        // Renderer expects 10-unit-wide rows so the layout aligns with the
+        // letters keyboard.
+        KeyDefinitions.emojisLayout.dropLast(1).forEachIndexed { idx, row ->
+            assertEquals("Emoji row $idx should have 10 keys", 10, row.keys.size)
+        }
+    }
+
+    @Test
+    fun `every emoji key commits an InsertText action with its label`() {
+        // Walk all 8 emoji rows (skip the bottom row which has space/backspace/enter).
+        KeyDefinitions.emojisLayout.dropLast(1).flatMap { it.keys }.forEach { key ->
+            val action = key.action
+            assertTrue(
+                "Emoji key ${key.label} should have InsertText action, got $action",
+                action is KeyAction.InsertText,
+            )
+            assertEquals(
+                "Emoji key ${key.label} should commit its label as text",
+                key.label,
+                (action as KeyAction.InsertText).text,
+            )
+        }
+    }
+
+    @Test
+    fun `emoji bottom row has ABC toggle that returns to Letters`() {
+        val row = KeyDefinitions.emojisLayout.last()
+        val abcKey = row.keys.first()
+        assertEquals("ABC", abcKey.label)
+        assertEquals(KeyVisual.Symbols, abcKey.visual)
+        assertEquals(KeyAction.SwitchLayout(LayoutKind.Letters), abcKey.action)
+    }
+
+    @Test
+    fun `emoji bottom row has backspace and enter keys`() {
+        val row = KeyDefinitions.emojisLayout.last()
+        // 4 keys: ABC + space + backspace + enter
+        assertEquals(4, row.keys.size)
+        val visuals = row.keys.map { it.visual }
+        assertTrue("Bottom row should have a space key", KeyVisual.Space in visuals)
+        assertTrue("Bottom row should have a backspace key", KeyVisual.Backspace in visuals)
+        assertTrue("Bottom row should have an enter key", KeyVisual.Enter in visuals)
+    }
+
+    // ── Accent map tests ──────────────────────────────────────────────────────
+
+    @Test
+    fun `accent map returns variants for common Latin letters`() {
+        // Cover the most common accents used in Spanish / French / German / Portuguese.
+        val aAccents = AccentMap.accentsFor('a')
+        assertNotNull(aAccents)
+        assertTrue("á should be in a-accents", "á" in aAccents!!)
+        assertTrue("à should be in a-accents", "à" in aAccents)
+        assertTrue("ä should be in a-accents", "ä" in aAccents)
+
+        val eAccents = AccentMap.accentsFor('e')
+        assertNotNull(eAccents)
+        assertTrue("é should be in e-accents", "é" in eAccents!!)
+        assertTrue("è should be in e-accents", "è" in eAccents)
+        assertTrue("ë should be in e-accents", "ë" in eAccents)
+
+        val nAccents = AccentMap.accentsFor('n')
+        assertNotNull(nAccents)
+        assertTrue("ñ should be in n-accents", "ñ" in nAccents!!)
+
+        val uAccents = AccentMap.accentsFor('u')
+        assertNotNull(uAccents)
+        assertTrue("ü should be in u-accents", "ü" in uAccents!!)
+        assertTrue("ú should be in u-accents", "ú" in uAccents)
+
+        val cAccents = AccentMap.accentsFor('c')
+        assertNotNull(cAccents)
+        assertTrue("ç should be in c-accents", "ç" in cAccents!!)
+    }
+
+    @Test
+    fun `accent map is case-insensitive on input`() {
+        // 'A' and 'a' should return the same list.
+        val lower = AccentMap.accentsFor('a')
+        val upper = AccentMap.accentsFor('A')
+        assertEquals(lower, upper)
+    }
+
+    @Test
+    fun `accent map returns null for letters without accents and for non-letters`() {
+        // 'q', 'w', 'v' etc. have no accents in our map.
+        assertNull(AccentMap.accentsFor('q'))
+        assertNull(AccentMap.accentsFor('w'))
+        assertNull(AccentMap.accentsFor('v'))
+        // Digits and punctuation have no accents.
+        assertNull(AccentMap.accentsFor('1'))
+        assertNull(AccentMap.accentsFor('?'))
+        assertNull(AccentMap.accentsFor(' '))
+    }
+
+    @Test
+    fun `hasAccents is true for single Latin letters in the map, false otherwise`() {
+        assertTrue(AccentMap.hasAccents("a"))
+        assertTrue(AccentMap.hasAccents("A"))
+        assertTrue(AccentMap.hasAccents("e"))
+        assertTrue(AccentMap.hasAccents("n"))
+
+        // Letters not in the map.
+        assertFalse(AccentMap.hasAccents("q"))
+        assertFalse(AccentMap.hasAccents("w"))
+
+        // Multi-character labels and non-letters.
+        assertFalse(AccentMap.hasAccents("ab"))
+        assertFalse(AccentMap.hasAccents("?"))
+        assertFalse(AccentMap.hasAccents("1"))
+        assertFalse(AccentMap.hasAccents(""))
+        assertFalse(AccentMap.hasAccents("space"))
+    }
+
+    @Test
+    fun `every accent in the map is a single non-empty string`() {
+        // Defensive: catch any accidental empty / multi-char entries.
+        for (c in 'a'..'z') {
+            val accents = AccentMap.accentsFor(c) ?: continue
+            accents.forEach { accent ->
+                assertTrue("Accent for $c should be non-empty", accent.isNotEmpty())
+                // We allow surrogate pairs (emoji-like multi-codepoint strings)
+                // but for the accent map every entry should be a single
+                // grapheme cluster of length <= 2 UTF-16 chars.
+                assertTrue(
+                    "Accent '$accent' for $c is too long (${accent.length} chars)",
+                    accent.length <= 2,
+                )
+            }
+        }
     }
 }

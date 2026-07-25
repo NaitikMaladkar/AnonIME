@@ -235,6 +235,26 @@ class AnonIMEService :
                 }
             }
 
+            is KeyAction.InsertText -> {
+                // Used by the emoji panel (multi-codepoint strings like "😀")
+                // and the long-press accent popup (e.g. "é", "ñ", "ü"). Honor
+                // shift state for single-char accents so the user gets É/Ñ/Ü
+                // when caps is on — but leave emoji and multi-char strings alone.
+                val text = if (
+                    uiState.value.shift.uppercase &&
+                    action.text.length == 1 &&
+                    action.text[0].isLetter()
+                ) {
+                    action.text.uppercase()
+                } else {
+                    action.text
+                }
+                ic.commitText(text, 1)
+                if (uiState.value.shift == ShiftState.OnNext) {
+                    uiState.value = uiState.value.copy(shift = ShiftState.Off)
+                }
+            }
+
             KeyAction.Backspace -> {
                 ic.deleteSurroundingText(1, 0)
             }

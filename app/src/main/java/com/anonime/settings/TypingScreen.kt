@@ -55,10 +55,10 @@ fun TypingScreen(onBack: () -> Unit) {
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // All toggles below persist their state via SettingsRepository so the
-            // wiring is ready, but the keyboard itself doesn't yet honor them.
-            // Each shows a "Coming soon" chip until the matching behavior is
-            // implemented in a future release.
+            // Long-press accents is now functional (Phase 2). The other four
+            // toggles below still persist via SettingsRepository but the
+            // keyboard doesn't yet honor them — each shows a "Coming soon"
+            // chip until the matching behavior is implemented.
             SettingOptionCard(
                 icon = Icons.Outlined.Visibility,
                 title = "Key pop-up preview",
@@ -75,8 +75,8 @@ fun TypingScreen(onBack: () -> Unit) {
                 description = "Long-press a letter to access accents like é, ñ, ü.",
                 checked = state.longPressAccents,
                 onCheckedChange = { repo.setLongPressAccents(it) },
-                comingSoon = true,
-                enabled = false,
+                comingSoon = false,
+                enabled = true,
             )
 
             SettingOptionCard(

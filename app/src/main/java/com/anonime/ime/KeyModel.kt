@@ -3,13 +3,28 @@ package com.anonime.ime
 /**
  * The set of actions a key press can produce.
  *
- * Phase 1 only models the primitive actions needed for a QWERTY + number row
- * keyboard with shift/caps. Phase 2+ will extend this (symbols panel, voice,
- * language switch, etc.) without changing the existing action contract.
+ * Phase 1 only modeled the primitive actions needed for a QWERTY + number row
+ * keyboard with shift/caps. Phase 2 adds:
+ *   - [InsertText]   : used by the emoji panel and by long-press accent popups
+ *                      to commit multi-codepoint strings (e.g. "é", "😀", "ñ").
+ *   - [SwitchLayout] : now also targets the [LayoutKind.Emojis] layout via the
+ *                      globe key on the bottom row.
  */
 sealed interface KeyAction {
     /** Commit a literal character to the input connection. */
     data class Character(val char: Char) : KeyAction
+
+    /**
+     * Commit an arbitrary text string to the input connection.
+     *
+     * Used for:
+     *   - Emoji keys (e.g. "😀", "❤️") — every emoji is a surrogate pair in
+     *     UTF-16, so it cannot fit in a single [Char].
+     *   - Long-press accent variants (e.g. "é", "ñ", "ü") — single Unicode
+     *     codepoint, but using the same code path as emoji keeps the dispatch
+     *     simple and uniform.
+     */
+    data class InsertText(val text: String) : KeyAction
 
     /** Delete one code point before the cursor. */
     data object Backspace : KeyAction
@@ -25,8 +40,11 @@ sealed interface KeyAction {
 
     /**
      * Switch to a different [LayoutKind]. Used by the layout-toggle keys:
-     * `?123` (Letters -> Symbols1), `ABC` (Symbols -> Letters),
-     * `=\<` (Symbols1 -> Symbols2), `?123` (Symbols2 -> Symbols1).
+     *   - `?123`  : Letters  -> Symbols1
+     *   - `ABC`   : Symbols1 -> Letters (or Symbols2 -> Letters, or Emojis -> Letters)
+     *   - `=\<`   : Symbols1 -> Symbols2
+     *   - `?123`  : Symbols2 -> Symbols1
+     *   - globe   : any non-Emoji layout -> Emojis
      */
     data class SwitchLayout(val kind: LayoutKind) : KeyAction
 }
@@ -52,7 +70,8 @@ enum class KeyVisual {
     Backspace,   // delete icon
     Space,       // wide bar
     Enter,       // context-aware label/icon
-    Symbols,     // ?123 toggle
+    Symbols,     // ?123 / ABC / =\< toggle
+    Globe,       // emoji/language switcher — globe icon
 }
 
 /**
@@ -69,8 +88,12 @@ data class KeyRow(val keys: List<Key>)
  *                 Toggled via the `?123` key on the letters bottom row.
  *  - [Symbols2] : extended symbols panel — more currency, math, brackets.
  *                 Toggled via the `=\<` key on the Symbols1 bottom row.
+ *  - [Emojis]   : grid of common emojis across smileys / hearts / hands /
+ *                 animals / food / activities / travel / objects categories.
+ *                 Toggled via the globe key on every bottom row. Returns to
+ *                 Letters via the `ABC` key on the Emojis bottom row.
  */
-enum class LayoutKind { Letters, Symbols1, Symbols2 }
+enum class LayoutKind { Letters, Symbols1, Symbols2, Emojis }
 
 /**
  * Shift state machine — three explicit states keep the renderer honest.
