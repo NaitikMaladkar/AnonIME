@@ -51,7 +51,7 @@ object KeyDefinitions {
     // ── Bottom row ─────────────────────────────────────────────────────────────
     val bottomRow: KeyRow = KeyRow(
         keys = listOf(
-            Key(label = "?123", width = 1.5f, action = KeyAction.ToggleSymbols, visual = KeyVisual.Symbols),
+            Key(label = "?123", width = 1.5f, action = KeyAction.SwitchLayout(LayoutKind.Symbols1), visual = KeyVisual.Symbols),
             Key(label = ",", width = 1.0f, action = KeyAction.Character(',')),
             Key(label = "space", width = 5.0f, action = KeyAction.Space, visual = KeyVisual.Space),
             Key(label = ".", width = 1.0f, action = KeyAction.Character('.')),
@@ -67,17 +67,118 @@ object KeyDefinitions {
         letterRow3,
         bottomRow,
     )
+
+    // ── Symbols panel 1 (primary) ──────────────────────────────────────────────
+    //
+    //   1 2 3 4 5 6 7 8 9 0
+    //   @ # $ % & - + ( ) /
+    //   [ABC] * " ' : ; ! ? [⌫]
+    //   [=\<] , [    space    ] . [↵]
+    //
+    /** Symbols1 row 2 — common punctuation / currency / arithmetic. */
+    val symbols1Row2: KeyRow = KeyRow(
+        keys = "@#$%&-+()/".map { ch ->
+            Key(label = ch.toString(), action = KeyAction.Character(ch))
+        }
+    )
+
+    /** Symbols1 row 3 — more punctuation, with ABC toggle and backspace. */
+    val symbols1Row3: KeyRow = KeyRow(
+        keys = buildList {
+            add(Key(label = "ABC", width = 1.5f, action = KeyAction.SwitchLayout(LayoutKind.Letters), visual = KeyVisual.Symbols))
+            add(Key(label = "*", action = KeyAction.Character('*')))
+            add(Key(label = "\"", action = KeyAction.Character('"')))
+            add(Key(label = "'", action = KeyAction.Character('\'')))
+            add(Key(label = ":", action = KeyAction.Character(':')))
+            add(Key(label = ";", action = KeyAction.Character(';')))
+            add(Key(label = "!", action = KeyAction.Character('!')))
+            add(Key(label = "?", action = KeyAction.Character('?')))
+            add(Key(label = "backspace", width = 1.5f, action = KeyAction.Backspace, visual = KeyVisual.Backspace))
+        }
+    )
+
+    /** Symbols1 row 4 — bottom row with `=\<` toggle to Symbols2. */
+    val symbols1BottomRow: KeyRow = KeyRow(
+        keys = listOf(
+            Key(label = "=\\<", width = 1.5f, action = KeyAction.SwitchLayout(LayoutKind.Symbols2), visual = KeyVisual.Symbols),
+            Key(label = ",", width = 1.0f, action = KeyAction.Character(',')),
+            Key(label = "space", width = 5.0f, action = KeyAction.Space, visual = KeyVisual.Space),
+            Key(label = ".", width = 1.0f, action = KeyAction.Character('.')),
+            Key(label = "enter", width = 1.5f, action = KeyAction.Enter, visual = KeyVisual.Enter),
+        )
+    )
+
+    /** Full Symbols1 layout — 4 rows. */
+    val symbols1Layout: List<KeyRow> = listOf(
+        numberRow, // reuse: 1 2 3 4 5 6 7 8 9 0
+        symbols1Row2,
+        symbols1Row3,
+        symbols1BottomRow,
+    )
+
+    // ── Symbols panel 2 (extended) ─────────────────────────────────────────────
+    //
+    //   ~ ` | • ™ ® ° × ÷ π
+    //   £ ¢ € ¥ ^ = { } \ §
+    //   [ABC] % © ✓ [ ] < > [⌫]
+    //   [?123] , [    space    ] . [↵]
+    //
+    /** Symbols2 row 1 — less common typographic / math symbols. */
+    val symbols2Row1: KeyRow = KeyRow(
+        keys = "~`|•™®°×÷π".map { ch ->
+            Key(label = ch.toString(), action = KeyAction.Character(ch))
+        }
+    )
+
+    /** Symbols2 row 2 — extended currency, brackets, section sign. */
+    val symbols2Row2: KeyRow = KeyRow(
+        keys = "£¢€¥^={}\\§".map { ch ->
+            Key(label = ch.toString(), action = KeyAction.Character(ch))
+        }
+    )
+
+    /** Symbols2 row 3 — more brackets / comparison, with ABC toggle and backspace. */
+    val symbols2Row3: KeyRow = KeyRow(
+        keys = buildList {
+            add(Key(label = "ABC", width = 1.5f, action = KeyAction.SwitchLayout(LayoutKind.Letters), visual = KeyVisual.Symbols))
+            add(Key(label = "%", action = KeyAction.Character('%')))
+            add(Key(label = "©", action = KeyAction.Character('©')))
+            add(Key(label = "✓", action = KeyAction.Character('✓')))
+            add(Key(label = "[", action = KeyAction.Character('[')))
+            add(Key(label = "]", action = KeyAction.Character(']')))
+            add(Key(label = "<", action = KeyAction.Character('<')))
+            add(Key(label = ">", action = KeyAction.Character('>')))
+            add(Key(label = "backspace", width = 1.5f, action = KeyAction.Backspace, visual = KeyVisual.Backspace))
+        }
+    )
+
+    /** Symbols2 row 4 — bottom row with `?123` toggle back to Symbols1. */
+    val symbols2BottomRow: KeyRow = KeyRow(
+        keys = listOf(
+            Key(label = "?123", width = 1.5f, action = KeyAction.SwitchLayout(LayoutKind.Symbols1), visual = KeyVisual.Symbols),
+            Key(label = ",", width = 1.0f, action = KeyAction.Character(',')),
+            Key(label = "space", width = 5.0f, action = KeyAction.Space, visual = KeyVisual.Space),
+            Key(label = ".", width = 1.0f, action = KeyAction.Character('.')),
+            Key(label = "enter", width = 1.5f, action = KeyAction.Enter, visual = KeyVisual.Enter),
+        )
+    )
+
+    /** Full Symbols2 layout — 4 rows. */
+    val symbols2Layout: List<KeyRow> = listOf(
+        symbols2Row1,
+        symbols2Row2,
+        symbols2Row3,
+        symbols2BottomRow,
+    )
 }
 
 /**
  * Resolve the active layout for the given [LayoutKind].
- *
- * Phase 1 only renders [LayoutKind.Letters]; the Symbols branch returns
- * the same Letters layout as a placeholder so the UI never explodes.
  */
 fun keyboardLayoutFor(kind: LayoutKind): List<KeyRow> = when (kind) {
-    LayoutKind.Letters -> KeyDefinitions.lettersLayout
-    LayoutKind.Symbols -> KeyDefinitions.lettersLayout // TODO Phase 2: real symbols panel
+    LayoutKind.Letters  -> KeyDefinitions.lettersLayout
+    LayoutKind.Symbols1 -> KeyDefinitions.symbols1Layout
+    LayoutKind.Symbols2 -> KeyDefinitions.symbols2Layout
 }
 
 /**

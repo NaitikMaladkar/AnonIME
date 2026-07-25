@@ -192,8 +192,11 @@ class AnonIMEService :
         // but this is the documented signal from the app we're typing into.
         incognito = attribute.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0
 
-        // Reset shift state per input focus — typing in a new field starts lowercase.
+        // Reset to the letters layout + shift off for each new input focus.
+        // If the user was on the symbols panel when they left a field, they
+        // expect the next field to start at the letters layout.
         uiState.value = uiState.value.copy(
+            layout = LayoutKind.Letters,
             shift = ShiftState.Off,
             enter = enterSpecFor(attribute),
             enabled = true,
@@ -203,7 +206,10 @@ class AnonIMEService :
     override fun onFinishInput() {
         super.onFinishInput()
         // Anonymous-typing: drop any state that could be construed as input history.
-        uiState.value = uiState.value.copy(shift = ShiftState.Off)
+        uiState.value = uiState.value.copy(
+            layout = LayoutKind.Letters,
+            shift = ShiftState.Off,
+        )
     }
 
     // ── Safety: always allow the IME to be dismissed ────────────────────────────
@@ -262,9 +268,13 @@ class AnonIMEService :
                 uiState.value = uiState.value.copy(shift = uiState.value.shift.next())
             }
 
-            KeyAction.ToggleSymbols -> {
-                // Phase 2: switch to symbols layout.
-                // For Phase 1, no-op (the layout doesn't exist yet).
+            is KeyAction.SwitchLayout -> {
+                // Switch to the requested layout. Preserve shift state across
+                // switches — the symbols panel ignores shift at render time
+                // (only alphabetic keys are case-aware), so preserving the
+                // state means: if the user was in Caps Lock, they stay in
+                // Caps Lock when they return to letters via the ABC key.
+                uiState.value = uiState.value.copy(layout = action.kind)
             }
         }
     }

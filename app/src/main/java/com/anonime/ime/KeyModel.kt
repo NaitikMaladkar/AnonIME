@@ -23,8 +23,12 @@ sealed interface KeyAction {
     /** Trigger the IME action (Go / Search / Send / Done / Next) on the input. */
     data object Enter : KeyAction
 
-    /** Switch to the symbols panel — stub for Phase 2, included so the model is stable. */
-    data object ToggleSymbols : KeyAction
+    /**
+     * Switch to a different [LayoutKind]. Used by the layout-toggle keys:
+     * `?123` (Letters -> Symbols1), `ABC` (Symbols -> Letters),
+     * `=\<` (Symbols1 -> Symbols2), `?123` (Symbols2 -> Symbols1).
+     */
+    data class SwitchLayout(val kind: LayoutKind) : KeyAction
 }
 
 /**
@@ -60,10 +64,13 @@ data class KeyRow(val keys: List<Key>)
 /**
  * The set of named layouts the IME can show.
  *
- * Phase 1 ships only [Letters] (with [ShiftState] controlling case).
- * [Symbols] is reserved for Phase 2.
+ *  - [Letters]  : QWERTY + number row + shift/caps.
+ *  - [Symbols1] : primary symbols panel — punctuation, currency, math basics.
+ *                 Toggled via the `?123` key on the letters bottom row.
+ *  - [Symbols2] : extended symbols panel — more currency, math, brackets.
+ *                 Toggled via the `=\<` key on the Symbols1 bottom row.
  */
-enum class LayoutKind { Letters, Symbols }
+enum class LayoutKind { Letters, Symbols1, Symbols2 }
 
 /**
  * Shift state machine — three explicit states keep the renderer honest.
