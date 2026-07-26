@@ -21,8 +21,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 minification (isMinifyEnabled) and resource shrinking
+            // (isShrinkResources) were aggressively stripping runtime-needed
+            // classes from Compose, Navigation, and reflection-based loaders,
+            // causing an instant crash on launch even with expanded ProGuard
+            // keep rules. Per user request, disabled both so the APK ships at
+            // its natural ~40 MB size and runs cleanly. We can re-enable
+            // shrinking later once we have a complete ProGuard ruleset that
+            // preserves every Compose/Navigation entry point.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
