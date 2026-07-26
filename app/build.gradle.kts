@@ -27,6 +27,23 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Sign release builds with the project keystore so the APK is
+            // installable on real devices. Credentials come from
+            // local.properties (or gradle.properties) so they're not checked
+            // into git.
+            val storeFilePath = providers
+                .gradleProperty("ANONIME_STORE_FILE").orNull
+            if (storeFilePath != null) {
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = file(storeFilePath)
+                    storePassword = providers
+                        .gradleProperty("ANONIME_STORE_PASSWORD").get()
+                    keyAlias = providers
+                        .gradleProperty("ANONIME_KEY_ALIAS").get()
+                    keyPassword = providers
+                        .gradleProperty("ANONIME_KEY_PASSWORD").get()
+                }
+            }
         }
         debug {
             isMinifyEnabled = false

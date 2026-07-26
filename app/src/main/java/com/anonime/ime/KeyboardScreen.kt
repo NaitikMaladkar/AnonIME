@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import java.util.Locale
 
 /**
  * Render-time description of the IME action button.
@@ -232,7 +233,10 @@ private fun AccentPopup(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 accents.forEach { accent ->
-                    val display = if (shiftUppercase) accent.uppercase() else accent
+                    // Use Locale.ROOT so 'i'-based accents don't acquire a dot
+                    // under Turkish locale. The accent strings in AccentMap are
+                    // Latin-1 / Latin Extended, so ROOT is the safe choice.
+                    val display = if (shiftUppercase) accent.uppercase(Locale.ROOT) else accent
                     Surface(
                         color = colors.surface,
                         contentColor = colors.onSurface,

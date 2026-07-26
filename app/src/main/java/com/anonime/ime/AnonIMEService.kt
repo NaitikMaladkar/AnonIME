@@ -4,6 +4,7 @@ import android.inputmethodservice.InputMethodService
 import android.os.SystemClock
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import java.util.Locale
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -227,7 +228,16 @@ class AnonIMEService :
 
         when (action) {
             is KeyAction.Character -> {
-                val c = if (uiState.value.shift.uppercase) action.char.uppercaseChar() else action.char
+                // Use Locale.ROOT for case conversion: 'i' must become 'I' for
+                // every user, not 'İ' (dotted capital I) under Turkish locale.
+                // Our keyboard only emits ASCII Latin letters, so ROOT is
+                // always the right choice.
+                //
+                // Note: Char.uppercaseChar() takes no Locale, so we go through
+                // String.uppercase(Locale) and pull the first codepoint back.
+                val c = if (uiState.value.shift.uppercase) {
+                    action.char.toString().uppercase(Locale.ROOT).first()
+                } else action.char
                 ic.commitText(c.toString(), 1)
                 // Auto-revert shift after one uppercase character (unless caps locked).
                 if (uiState.value.shift == ShiftState.OnNext) {
@@ -240,12 +250,17 @@ class AnonIMEService :
                 // and the long-press accent popup (e.g. "é", "ñ", "ü"). Honor
                 // shift state for single-char accents so the user gets É/Ñ/Ü
                 // when caps is on — but leave emoji and multi-char strings alone.
+                //
+                // Use Locale.ROOT for uppercase conversion so Turkish users
+                // don't get dotted-I (İ) when shift+long-pressing 'i'. The
+                // Latin accented letters in AccentMap are not locale-sensitive,
+                // so ROOT is the correct choice.
                 val text = if (
                     uiState.value.shift.uppercase &&
                     action.text.length == 1 &&
                     action.text[0].isLetter()
                 ) {
-                    action.text.uppercase()
+                    action.text.uppercase(Locale.ROOT)
                 } else {
                     action.text
                 }
@@ -256,7 +271,19 @@ class AnonIMEService :
             }
 
             KeyAction.Backspace -> {
-                ic.deleteSurroundingText(1, 0)
+                // If the editor has a selection, delete the selection (not
+                // the char before it). Otherwise delete one codepoint before
+                // the cursor using the codepoint-safe variant so surrogate
+                // pairs (emoji like "😀") are deleted as a unit, not as two
+                // half-characters that leave a dangling surrogate.
+                val selected = ic.getSelectedText(0)
+                if (selected.isNullOrEmpty()) {
+                    ic.deleteSurroundingTextInCodePoints(1, 0)
+                } else {
+                    // Committing empty text replaces (and thus deletes) the
+                    // current selection without touching surrounding chars.
+                    ic.commitText("", 1)
+                }
             }
 
             KeyAction.Space -> {

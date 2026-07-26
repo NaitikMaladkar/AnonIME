@@ -45,6 +45,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import com.anonime.ui.components.StatusChip
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 
 /**
  * A floating bottom-sheet guide that walks the user through the two system
@@ -92,17 +94,24 @@ fun GuidedSetupSheet(onDismiss: () -> Unit) {
         onStopOrDispose { }
     }
 
-    // Auto-dismiss when both steps become Done. We use LaunchedEffect with a
-    // snapshotFlow so the dismissal only fires AFTER the user has seen the
-    // green chips (i.e. on the next composition after status flips).
+    // Auto-dismiss when both steps TRANSITION from not-done to all-done.
+    //
+    // We deliberately do NOT auto-dismiss if the sheet was opened when both
+    // steps were already done (e.g. the user re-opened the guide from
+    // GeneralScreen after completing setup). Without this guard, the sheet
+    // would close instantly on open — the user wouldn't even see the green
+    // "Done" chips. The snapshotFlow filter-+dropWhile pattern below ensures
+    // the dismiss only fires when the user actually completes the last step
+    // while the sheet is open.
     LaunchedEffect(Unit) {
         snapshotFlow { enabled && isDefault }
-            .collectLatest { allDone ->
-                if (allDone) {
-                    // Animate the sheet away then call onDismiss.
-                    sheetState.hide()
-                    onDismiss()
-                }
+            .drop(1) // skip the initial emission — don't dismiss on open.
+            .filter { it }
+            .collectLatest {
+                // Give the user a moment to see the "all green" state, then
+                // animate the sheet away.
+                sheetState.hide()
+                onDismiss()
             }
     }
 

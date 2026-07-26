@@ -1,5 +1,7 @@
 package com.anonime.ime
 
+import java.util.Locale
+
 /**
  * Static definition of every key row for Phase 1 + Phase 2.
  *
@@ -287,10 +289,14 @@ fun keyboardLayoutFor(kind: LayoutKind): List<KeyRow> = when (kind) {
 /**
  * Apply [shift] to a key label, when applicable.
  * Only alphabetic keys change case; everything else is rendered as-is.
+ *
+ * Case conversion uses [Locale.ROOT] so 'i' becomes 'I' (not 'İ') regardless
+ * of the device locale. Our keyboard only emits ASCII Latin letters, so ROOT
+ * is always correct.
  */
 fun labelFor(key: Key, shift: ShiftState): String =
     if (shift.uppercase && key.label.length == 1 && key.label[0].isLetter()) {
-        key.label.uppercase()
+        key.label.uppercase(Locale.ROOT)
     } else {
         key.label
     }
