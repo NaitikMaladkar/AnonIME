@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -18,10 +19,8 @@ import com.anonime.settings.GeneralScreen
 import com.anonime.settings.HomeScreen
 import com.anonime.settings.PrivacyScreen
 import com.anonime.settings.SettingsCategory
-import com.anonime.settings.SetupScreen
 import com.anonime.settings.TypingScreen
 import com.anonime.ui.theme.AnonIMETheme
-import androidx.compose.foundation.isSystemInDarkTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,18 +41,12 @@ class MainActivity : ComponentActivity() {
 
             AnonIMETheme(darkTheme = darkTheme, dynamic = settings.dynamicColor) {
                 val nav = rememberNavController()
-                val startRoute = if (settings.setupCompleted) Routes.HOME else Routes.SETUP
 
-                NavHost(navController = nav, startDestination = startRoute) {
-                    composable(Routes.SETUP) {
-                        SetupScreen(
-                            onCompleted = {
-                                nav.navigate(Routes.HOME) {
-                                    popUpTo(Routes.SETUP) { inclusive = true }
-                                }
-                            },
-                        )
-                    }
+                // The app always opens at Home. There is no first-launch setup
+                // gate — the home screen shows a "Disabled" status chip when
+                // the IME isn't enabled yet, and tapping that chip opens the
+                // GuidedSetupSheet which walks the user through system Settings.
+                NavHost(navController = nav, startDestination = Routes.HOME) {
                     composable(Routes.HOME) {
                         HomeScreen(
                             onCategoryClick = { category ->
@@ -73,7 +66,6 @@ class MainActivity : ComponentActivity() {
 }
 
 private object Routes {
-    const val SETUP = "setup"
     const val HOME = "home"
     const val GENERAL = "general"
     const val APPEARANCE = "appearance"

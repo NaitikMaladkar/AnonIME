@@ -2,7 +2,10 @@ package com.anonime.settings
 
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +47,14 @@ import com.anonime.ui.components.StatusChip
  * Layout: top app bar with the app name + a status chip (green when both
  * the IME is enabled AND set as default, otherwise red). Below the bar,
  * a vertical list of 5 category cards.
+ *
+ * ── First-launch flow ────────────────────────────────────────────────────────
+ * There is no separate setup screen. On first launch (or any time the IME
+ * isn't enabled AND set as default), the status chip reads "Disabled".
+ * Tapping it opens [GuidedSetupSheet], a floating bottom-sheet that walks
+ * the user through the two system settings needed to activate the keyboard.
+ * When both steps are complete, the sheet auto-dismisses and the chip
+ * updates to "Enabled" on the next lifecycle resume.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +67,11 @@ fun HomeScreen(
 
     var enabled by remember { mutableStateOf(false) }
     var isDefault by remember { mutableStateOf(false) }
+
+    // Tracks whether the guided setup sheet is open. Tapping the "Disabled"
+    // chip opens it; the sheet dismisses itself when both steps complete.
+    var showGuide by remember { mutableStateOf(false) }
+
     LifecycleStartEffect(Unit) {
         enabled = isImeEnabled(imm)
         isDefault = isImeDefault(ctx)
@@ -76,11 +92,23 @@ fun HomeScreen(
                     )
                 },
                 actions = {
-                    StatusChip(
-                        ok = allOk,
-                        labelOk = "Enabled",
-                        labelPending = "Disabled",
-                    )
+                    // The chip is tappable when disabled. Wrapping it in a
+                    // small clickable surface gives the user a clear target
+                    // without changing the chip's visual style.
+                    val chipModifier = if (!allOk) {
+                        Modifier
+                            .padding(end = 4.dp)
+                            .then(rememberNoRippleClickable { showGuide = true })
+                    } else {
+                        Modifier.padding(end = 4.dp)
+                    }
+                    Box(modifier = chipModifier) {
+                        StatusChip(
+                            ok = allOk,
+                            labelOk = "Enabled",
+                            labelPending = "Disabled",
+                        )
+                    }
                     Spacer(modifier = Modifier.width(12.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -111,6 +139,10 @@ fun HomeScreen(
             }
         }
     )
+
+    if (showGuide) {
+        GuidedSetupSheet(onDismiss = { showGuide = false })
+    }
 }
 
 /** The set of categories shown on the home screen. Order = display order. */
@@ -155,3 +187,19 @@ enum class SettingsCategory(
 
 // (Helpers isImeEnabled, isImeDefault, startActivitySafe, IME_ID are
 // declared as internal in GeneralScreen.kt — shared across this package.)
+
+/**
+ * A clickable modifier with no ripple indication — used for the tappable
+ * "Disabled" status chip in the home top app bar so it doesn't visually
+ * flicker on tap. The chip itself already changes color on state change,
+ * so a ripple would be redundant.
+ */
+@Composable
+private fun rememberNoRippleClickable(onClick: () -> Unit): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    return Modifier.clickable(
+        interactionSource = interaction,
+        indication = null,
+        onClick = onClick,
+    )
+}

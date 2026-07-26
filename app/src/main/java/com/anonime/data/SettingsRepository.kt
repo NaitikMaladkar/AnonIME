@@ -46,8 +46,6 @@ class SettingsRepository private constructor(
     fun setSoundEnabled(enabled: Boolean) = update { it.copy(soundEnabled = enabled) }
     fun setHapticEnabled(enabled: Boolean) = update { it.copy(hapticEnabled = enabled) }
 
-    fun setSetupCompleted(completed: Boolean) = update { it.copy(setupCompleted = completed) }
-
     // ── Internals ──────────────────────────────────────────────────────────────
     private fun update(transform: (SettingsState) -> SettingsState) {
         val next = transform(_state.value)
@@ -60,7 +58,6 @@ class SettingsRepository private constructor(
             putBoolean(KEY_AUTO_CAPITALIZE, next.autoCapitalize)
             putBoolean(KEY_SOUND_ENABLED, next.soundEnabled)
             putBoolean(KEY_HAPTIC_ENABLED, next.hapticEnabled)
-            putBoolean(KEY_SETUP_COMPLETED, next.setupCompleted)
         }
         _state.value = next
     }
@@ -74,11 +71,13 @@ class SettingsRepository private constructor(
             ?.let { runCatching { KeyHeight.valueOf(it) }.getOrNull() }
             ?: KeyHeight.NORMAL,
         keyPopupPreview = prefs.getBoolean(KEY_POPUP_PREVIEW, true),
-        longPressAccents = prefs.getBoolean(KEY_LONGPRESS_ACCENTS, false),
+        // Phase 2 default for longPressAccents flipped to true. Existing users
+        // who never touched this toggle will get the new default on next read
+        // because the prefs key was never written.
+        longPressAccents = prefs.getBoolean(KEY_LONGPRESS_ACCENTS, true),
         autoCapitalize = prefs.getBoolean(KEY_AUTO_CAPITALIZE, true),
         soundEnabled = prefs.getBoolean(KEY_SOUND_ENABLED, false),
         hapticEnabled = prefs.getBoolean(KEY_HAPTIC_ENABLED, false),
-        setupCompleted = prefs.getBoolean(KEY_SETUP_COMPLETED, false),
     )
 
     companion object {
@@ -91,7 +90,6 @@ class SettingsRepository private constructor(
         private const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         private const val KEY_SOUND_ENABLED = "sound_enabled"
         private const val KEY_HAPTIC_ENABLED = "haptic_enabled"
-        private const val KEY_SETUP_COMPLETED = "setup_completed"
 
         @Volatile private var INSTANCE: SettingsRepository? = null
 

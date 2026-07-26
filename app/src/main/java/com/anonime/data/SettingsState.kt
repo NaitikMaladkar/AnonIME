@@ -50,12 +50,4 @@ data class SettingsState(
     val autoCapitalize: Boolean = true,
     val soundEnabled: Boolean = false,
     val hapticEnabled: Boolean = false,
-
-    // ── Setup state ────────────────────────────────────────────────────────────
-    /**
-     * Set to true the first time the user completes (or skips) the setup
-     * wizard. Used by MainActivity to decide whether to land on the Setup
-     * screen or the Home screen on launch.
-     */
-    val setupCompleted: Boolean = false,
 )

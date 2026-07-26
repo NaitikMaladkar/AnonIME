@@ -46,6 +46,13 @@ fun GeneralScreen(onBack: () -> Unit) {
 
     var enabled by remember { mutableStateOf(false) }
     var isDefault by remember { mutableStateOf(false) }
+
+    // The "Enable" and "Set as default" cards both open the guided setup
+    // sheet instead of deep-linking straight to system settings. The sheet
+    // walks the user through both steps in order, which is friendlier than
+    // dropping them into a system Settings page they might not recognize.
+    var showGuide by remember { mutableStateOf(false) }
+
     LifecycleStartEffect(Unit) {
         enabled = isImeEnabled(imm)
         isDefault = isImeDefault(ctx)
@@ -75,33 +82,33 @@ fun GeneralScreen(onBack: () -> Unit) {
                 icon = if (enabled) Icons.Outlined.CheckCircle else Icons.Outlined.Keyboard,
                 title = if (enabled) "AnonIME is enabled" else "Enable AnonIME",
                 description = if (enabled)
-                    "Already toggled on in system settings. Tap to manage."
+                    "Already toggled on in system settings. Tap to re-open the guided setup."
                 else
-                    "Open Android's keyboard settings and toggle AnonIME on.",
-                onClick = { ctx.startActivitySafe(Settings.ACTION_INPUT_METHOD_SETTINGS) },
+                    "Open the guided setup to walk through enabling AnonIME in system settings.",
+                onClick = { showGuide = true },
             )
 
             SettingActionCard(
                 icon = if (isDefault) Icons.Outlined.CheckCircle else Icons.Outlined.Apps,
                 title = if (isDefault) "AnonIME is your default keyboard" else "Set AnonIME as default",
                 description = if (isDefault)
-                    "Currently the active keyboard. Tap to switch."
+                    "Currently the active keyboard. Tap to re-open the guided setup."
                 else
-                    "Pick AnonIME from the list of available keyboards.",
-                onClick = { imm.showInputMethodPicker() },
+                    "Open the guided setup to pick AnonIME as your default keyboard.",
+                onClick = { showGuide = true },
             )
 
             SettingActionCard(
                 icon = Icons.Outlined.Settings,
                 title = "Open system keyboard settings",
-                description = "Jump to Android's keyboard & input method settings page.",
+                description = "Jump directly to Android's keyboard & input method settings page.",
                 onClick = { ctx.startActivitySafe(Settings.ACTION_INPUT_METHOD_SETTINGS) },
             )
 
             SettingActionCard(
                 icon = Icons.Outlined.Info,
                 title = "AnonIME version",
-                description = "Phase 1 with symbols panels — version 0.2.0-phase1 (build 2).",
+                description = "Phase 2 (globe key, emoji panel, long-press accents, live settings) — version 0.3.0-phase2 (build 3).",
                 onClick = { /* no-op informational */ },
                 enabled = false,
             )
@@ -114,6 +121,10 @@ fun GeneralScreen(onBack: () -> Unit) {
                 enabled = false,
             )
         }
+    }
+
+    if (showGuide) {
+        GuidedSetupSheet(onDismiss = { showGuide = false })
     }
 }
 

@@ -100,8 +100,8 @@ fun PrivacyScreen(onBack: () -> Unit) {
             )
             PrivacyBullet(
                 icon = Icons.Outlined.Lock,
-                title = "No persistence",
-                description = "Your typing is never written to disk, SharedPreferences, databases, or files. Transient buffers are wiped after every commit.",
+                title = "No typing data stored",
+                description = "What you type is never written to disk. We only store your UI preferences (theme, key height, etc.) in SharedPreferences — never anything you've typed. Transient typing buffers are wiped after every commit.",
             )
             PrivacyBullet(
                 icon = Icons.Outlined.NoAccounts,
