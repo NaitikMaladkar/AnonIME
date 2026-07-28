@@ -1,6 +1,8 @@
 package com.anonime.ime
 
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.net.Uri
 import android.os.SystemClock
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -20,6 +22,8 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.anonime.data.SettingsRepository
+import com.anonime.data.ThemeMode
 
 /**
  * The IME service.
@@ -74,6 +78,14 @@ class AnonIMEService :
         mutableStateOf(KeyboardUiState())
     private var keyboardView: AnonKeyboardView? = null
 
+    // ── Settings ────────────────────────────────────────────────────────────────
+    /**
+     * Process-wide settings repo. Used by toolbar actions (theme cycle,
+     * add/remove toolbar items, etc.) that need to write back to prefs and
+     * have the change flow through to the IME composition on the next frame.
+     */
+    private lateinit var settingsRepo: SettingsRepository
+
     // ── Anonymous-typing state ──────────────────────────────────────────────────
     /**
      * True while the current editor opted out of personalized learning via
@@ -125,6 +137,7 @@ class AnonIMEService :
         // state transition before any subsequent IME callbacks run.
         lifecycleDispatcher.onServicePreSuperOnCreate()
         super.onCreate()
+        settingsRepo = SettingsRepository.get(this)
         // Initialize SavedStateRegistry with no persisted state — preserves
         // the anonymous-typing guarantee (we never restore any user data).
         savedStateRegistryController.performRestore(null)
@@ -322,6 +335,181 @@ class AnonIMEService :
                 // state means: if the user was in Caps Lock, they stay in
                 // Caps Lock when they return to letters via the ABC key.
                 uiState.value = uiState.value.copy(layout = action.kind)
+            }
+
+            is KeyAction.ToolbarAction -> {
+                // Dispatch a toolbar item tap. Most kinds are handled inline
+                // here; a few (Emoji, Backspace) never reach this branch
+                // because [ToolbarItemKind.toAction] returns a dedicated
+                // KeyAction subtype for them.
+                handleToolbarAction(action.kind)
+            }
+
+            is KeyAction.AddToolbarItem -> {
+                // User dragged a chip from the menu panel onto the toolbar.
+                // Persist the addition — the next composition will pick up
+                // the new toolbar items list via StateFlow.
+                settingsRepo.addToolbarItem(action.kind)
+            }
+
+            is KeyAction.RemoveToolbarItem -> {
+                // User long-pressed a toolbar item and confirmed removal.
+                settingsRepo.removeToolbarItem(action.kind)
+            }
+        }
+    }
+
+    /**
+     * Dispatch a [ToolbarItemKind] that doesn't have a dedicated [KeyAction]
+     * subtype. Centralizing this here keeps [handleKeyAction] small and makes
+     * it easy to add new toolbar items — just add a branch here.
+     *
+     * ── Anonymous-typing note ───────────────────────────────────────────────────
+     * The PASTE action reads the system clipboard. We do NOT store clipboard
+     * contents anywhere — we read once, commit to the InputConnection, and
+     * drop the reference. This preserves the guarantee that the IME never
+     * persists user data.
+     *
+     * The SEARCH action launches a browser query for the selected text. The
+     * query is forwarded to the system browser via ACTION_VIEW + a google.com
+     * search URL. We never log or store the query.
+     */
+    private fun handleToolbarAction(kind: ToolbarItemKind) {
+        when (kind) {
+            ToolbarItemKind.VOICE -> {
+                // Phase 2 placeholder — voice typing not implemented.
+                // Future: launch SpeechRecognizer via an Activity (IME cannot
+                // host SpeechRecognizer directly because it has no Activity
+                // context). For now, this is a no-op.
+            }
+
+            ToolbarItemKind.MENU -> {
+                // The menu button's toggle behavior is handled by the toolbar
+                // composable itself (it switches to LayoutKind.Menu). If we
+                // ever receive this action here, treat it as a layout switch.
+                uiState.value = uiState.value.copy(layout = LayoutKind.Menu)
+            }
+
+            ToolbarItemKind.EMOJI -> {
+                uiState.value = uiState.value.copy(layout = LayoutKind.Emojis)
+            }
+
+            ToolbarItemKind.SETTINGS -> {
+                // Launch the app's settings Activity in a new task. We use
+                // FLAG_ACTIVITY_NEW_TASK because the IME service has no
+                // Activity context — the OS requires this flag for any
+                // startActivity call from a non-Activity context.
+                val intent = Intent().apply {
+                    setClassName(packageName, "com.anonime.MainActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                runCatching { startActivity(intent) }
+                // Hide the IME so the settings Activity is visible.
+                requestHideSelf(0)
+            }
+
+            ToolbarItemKind.THEME -> {
+                // Cycle: System → Light → Dark → System.
+                val next = when (settingsRepo.state.value.themeMode) {
+                    ThemeMode.SYSTEM -> ThemeMode.LIGHT
+                    ThemeMode.LIGHT -> ThemeMode.DARK
+                    ThemeMode.DARK -> ThemeMode.SYSTEM
+                }
+                settingsRepo.setThemeMode(next)
+            }
+
+            ToolbarItemKind.PASTE -> {
+                // Read the system clipboard and commit. We do NOT store the
+                // clipboard content — read once, commit, drop the reference.
+                val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                val clip = cm.primaryClip ?: return
+                if (clip.itemCount == 0) return
+                val text = clip.getItemAt(0).coerceToText(this) ?: return
+                val ic = currentInputConnection ?: return
+                ic.commitText(text, 1)
+            }
+
+            ToolbarItemKind.SEARCH -> {
+                // Search the selected text (or current word) on the web.
+                val ic = currentInputConnection ?: return
+                val selected = ic.getSelectedText(0)
+                val query = if (!selected.isNullOrEmpty()) {
+                    selected.toString()
+                } else {
+                    // No selection — extract the word around the cursor.
+                    val before = ic.getTextBeforeCursor(40, 0) ?: ""
+                    val after = ic.getTextAfterCursor(40, 0) ?: ""
+                    val wordStart = before.lastIndexOf(' ').plus(1)
+                        .coerceAtLeast(0)
+                    val wordEnd = after.indexOf(' ').let {
+                        if (it < 0) after.length else it
+                    }
+                    (before.substring(wordStart) + after.substring(0, wordEnd)).trim()
+                }
+                if (query.isBlank()) return
+                val url = "https://www.google.com/search?q=" +
+                    Uri.encode(query)
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                runCatching { startActivity(intent) }
+                requestHideSelf(0)
+            }
+
+            ToolbarItemKind.TRANSLATE,
+            ToolbarItemKind.STICKERS,
+            ToolbarItemKind.CLIPBOARD,
+            ToolbarItemKind.ONE_HANDED -> {
+                // Phase 3 placeholders — no behavior yet. The toolbar still
+                // shows the icon so the user can pin/unpin it as desired.
+            }
+
+            ToolbarItemKind.CURSOR_LEFT -> {
+                val ic = currentInputConnection ?: return
+                // deleteSurroundingText operates on code units, but for cursor
+                // movement we use commitText with a zero-length replacement
+                // and setSelection instead. Simpler: use finishComposingText
+                // then set selection to current - 1.
+                val cs = ic.getTextBeforeCursor(1, 0)
+                if (!cs.isNullOrEmpty()) {
+                    // Compute new position by reading cursor position via
+                    // getSelectedText(0). If empty, cursor has no selection;
+                    // we approximate "left one char" by deleting and re-committing.
+                    // For correctness, use the proper API:
+                    val extracted = ic.getExtractedText(
+                        android.view.inputmethod.ExtractedTextRequest(), 0
+                    )
+                    if (extracted != null) {
+                        val newPos = (extracted.selectionStart - 1).coerceAtLeast(0)
+                        ic.setSelection(newPos, newPos)
+                    }
+                }
+            }
+
+            ToolbarItemKind.CURSOR_RIGHT -> {
+                val ic = currentInputConnection ?: return
+                val extracted = ic.getExtractedText(
+                    android.view.inputmethod.ExtractedTextRequest(), 0
+                )
+                if (extracted != null) {
+                    val newPos = (extracted.selectionStart + 1)
+                        .coerceAtMost(extracted.text.length)
+                    ic.setSelection(newPos, newPos)
+                }
+            }
+
+            ToolbarItemKind.BACKSPACE -> {
+                // Should normally not arrive here — Backspace is dispatched
+                // via KeyAction.Backspace by the toolbar. Handle it anyway
+                // for safety.
+                val ic = currentInputConnection ?: return
+                val selected = ic.getSelectedText(0)
+                if (selected.isNullOrEmpty()) {
+                    ic.deleteSurroundingTextInCodePoints(1, 0)
+                } else {
+                    ic.commitText("", 1)
+                }
             }
         }
     }

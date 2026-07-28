@@ -278,12 +278,19 @@ object KeyDefinitions {
 
 /**
  * Resolve the active layout for the given [LayoutKind].
+ *
+ * Note: [LayoutKind.Menu] is rendered by [MenuPanel] in [KeyboardScreen],
+ * NOT by the standard key-row renderer. If [keyboardLayoutFor] is called
+ * with Menu, it returns an empty list as a defensive fallback — this
+ * should never happen because [KeyboardScreen] routes Menu to the
+ * [MenuPanel] composable before calling [keyboardLayoutFor].
  */
 fun keyboardLayoutFor(kind: LayoutKind): List<KeyRow> = when (kind) {
     LayoutKind.Letters  -> KeyDefinitions.lettersLayout
     LayoutKind.Symbols1 -> KeyDefinitions.symbols1Layout
     LayoutKind.Symbols2 -> KeyDefinitions.symbols2Layout
     LayoutKind.Emojis   -> KeyDefinitions.emojisLayout
+    LayoutKind.Menu     -> emptyList()
 }
 
 /**

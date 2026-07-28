@@ -3,6 +3,9 @@ package com.anonime.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import com.anonime.ime.ToolbarItemKind
+import com.anonime.ime.parseToolbarItems
+import com.anonime.ime.serializeToolbarItems
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +49,37 @@ class SettingsRepository private constructor(
     fun setSoundEnabled(enabled: Boolean) = update { it.copy(soundEnabled = enabled) }
     fun setHapticEnabled(enabled: Boolean) = update { it.copy(hapticEnabled = enabled) }
 
+    /**
+     * Add [kind] to the pinned toolbar items, if not already present.
+     * Fixed items (Voice, Menu) are silently ignored — they're always shown.
+     */
+    fun addToolbarItem(kind: ToolbarItemKind) {
+        if (kind.isFixed) return
+        update { state ->
+            if (state.toolbarItems.contains(kind)) state
+            else state.copy(toolbarItems = state.toolbarItems + kind)
+        }
+    }
+
+    /** Remove [kind] from the pinned toolbar items. Fixed items are ignored. */
+    fun removeToolbarItem(kind: ToolbarItemKind) {
+        if (kind.isFixed) return
+        update { state ->
+            state.copy(toolbarItems = state.toolbarItems - kind)
+        }
+    }
+
+    /**
+     * Reorder the pinned toolbar items. [newOrder] must contain exactly the
+     * same set as the current list (no additions, no removals) — this is a
+     * pure reorder. Mismatched sets are rejected silently.
+     */
+    fun reorderToolbarItems(newOrder: List<ToolbarItemKind>) {
+        val current = _state.value.toolbarItems.toSet()
+        if (newOrder.toSet() != current) return
+        update { it.copy(toolbarItems = newOrder) }
+    }
+
     // ── Internals ──────────────────────────────────────────────────────────────
     private fun update(transform: (SettingsState) -> SettingsState) {
         val next = transform(_state.value)
@@ -58,6 +92,7 @@ class SettingsRepository private constructor(
             putBoolean(KEY_AUTO_CAPITALIZE, next.autoCapitalize)
             putBoolean(KEY_SOUND_ENABLED, next.soundEnabled)
             putBoolean(KEY_HAPTIC_ENABLED, next.hapticEnabled)
+            putString(KEY_TOOLBAR_ITEMS, serializeToolbarItems(next.toolbarItems))
         }
         _state.value = next
     }
@@ -78,6 +113,7 @@ class SettingsRepository private constructor(
         autoCapitalize = prefs.getBoolean(KEY_AUTO_CAPITALIZE, true),
         soundEnabled = prefs.getBoolean(KEY_SOUND_ENABLED, false),
         hapticEnabled = prefs.getBoolean(KEY_HAPTIC_ENABLED, false),
+        toolbarItems = parseToolbarItems(prefs.getString(KEY_TOOLBAR_ITEMS, null)),
     )
 
     companion object {
@@ -90,6 +126,7 @@ class SettingsRepository private constructor(
         private const val KEY_AUTO_CAPITALIZE = "auto_capitalize"
         private const val KEY_SOUND_ENABLED = "sound_enabled"
         private const val KEY_HAPTIC_ENABLED = "haptic_enabled"
+        private const val KEY_TOOLBAR_ITEMS = "toolbar_items"
 
         @Volatile private var INSTANCE: SettingsRepository? = null
 

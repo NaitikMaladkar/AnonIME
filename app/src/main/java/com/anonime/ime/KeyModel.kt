@@ -45,8 +45,34 @@ sealed interface KeyAction {
      *   - `=\<`   : Symbols1 -> Symbols2
      *   - `?123`  : Symbols2 -> Symbols1
      *   - globe   : any non-Emoji layout -> Emojis
+     *   - menu    : any layout -> Menu (toolbar customization panel)
      */
     data class SwitchLayout(val kind: LayoutKind) : KeyAction
+
+    /**
+     * Dispatch a toolbar item tap. The IME service routes the action based on
+     * [ToolbarItemKind.toAction] — see [AnonIMEService.handleKeyAction].
+     *
+     * Used for items that don't have a dedicated [KeyAction] subtype
+     * (Settings, Theme, Paste, Search, Translate, …). For items that do
+     * (Emoji → [SwitchLayout], Backspace → [Backspace]), the toolbar calls
+     * those actions directly.
+     */
+    data class ToolbarAction(val kind: ToolbarItemKind) : KeyAction
+
+    /**
+     * Add [kind] to the user's pinned toolbar items. Dispatched when the user
+     * drags a chip from the menu panel onto the toolbar drop zone. The
+     * repository persists the new list, and the next composition picks it up.
+     */
+    data class AddToolbarItem(val kind: ToolbarItemKind) : KeyAction
+
+    /**
+     * Remove [kind] from the user's pinned toolbar items. Dispatched when the
+     * user long-presses a toolbar item and confirms removal. Fixed items
+     * (Voice, Menu) are ignored — they cannot be removed.
+     */
+    data class RemoveToolbarItem(val kind: ToolbarItemKind) : KeyAction
 }
 
 /**
@@ -92,8 +118,13 @@ data class KeyRow(val keys: List<Key>)
  *                 animals / food / activities / travel / objects categories.
  *                 Toggled via the globe key on every bottom row. Returns to
  *                 Letters via the `ABC` key on the Emojis bottom row.
+ *  - [Menu]     : toolbar customization panel — a grid of "small buttons"
+ *                 (chips) for every [ToolbarItemKind]. Chips can be dragged
+ *                 up to the toolbar drop zone to pin them, and tapped to
+ *                 perform their action. Returns to Letters via the back
+ *                 button or by tapping the menu icon again.
  */
-enum class LayoutKind { Letters, Symbols1, Symbols2, Emojis }
+enum class LayoutKind { Letters, Symbols1, Symbols2, Emojis, Menu }
 
 /**
  * Shift state machine — three explicit states keep the renderer honest.

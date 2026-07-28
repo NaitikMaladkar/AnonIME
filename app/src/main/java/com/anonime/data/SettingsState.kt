@@ -1,5 +1,7 @@
 package com.anonime.data
 
+import com.anonime.ime.ToolbarItemKind
+
 /**
  * The user's theme preference — drives both the settings Activity and the IME.
  *
@@ -37,6 +39,12 @@ enum class KeyHeight(val dp: Int) {
  * every time it draws a frame, so changes flow through without restart.
  * Settings that have no implementation yet (sound, haptic, accents, popups)
  * are still persisted here so the UI can be wired ahead of the logic.
+ *
+ * ── Toolbar items ────────────────────────────────────────────────────────────
+ * [toolbarItems] holds the user's pinned set in display order. The fixed
+ * Voice + Menu items are NOT in this list — they're rendered unconditionally
+ * by the toolbar. Defaults to [ToolbarItemKind.DEFAULT_TOOLBAR] (Emoji,
+ * Settings, Theme) so first-time users see a useful starting set.
  */
 data class SettingsState(
     // ── Appearance ────────────────────────────────────────────────────────────
@@ -50,4 +58,7 @@ data class SettingsState(
     val autoCapitalize: Boolean = true,
     val soundEnabled: Boolean = false,
     val hapticEnabled: Boolean = false,
+
+    // ── Toolbar (Phase 2: user-customizable toolbar above the keyboard) ─────────
+    val toolbarItems: List<ToolbarItemKind> = ToolbarItemKind.DEFAULT_TOOLBAR,
 )

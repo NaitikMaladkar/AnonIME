@@ -105,11 +105,26 @@ data class KeyboardUiState(
  * Compose state holders). The [onAction] callback fires whenever the user
  * taps a key.
  *
+ * ── Layout ──────────────────────────────────────────────────────────────────
+ * The screen is a vertical Column with two parts:
+ *   1. [Toolbar] — always visible at the top. Voice icon (left), user items
+ *      (middle), Menu icon (right). Doubles as a drop zone while the user
+ *      is dragging a chip from the menu panel.
+ *   2. Body — either the active keyboard layout (Letters / Symbols1 /
+ *      Symbols2 / Emojis) or the [MenuPanel] when [state.layout] == Menu.
+ *
+ * ── Drag state ──────────────────────────────────────────────────────────────
+ * [dragState] is hoisted at this level so the Toolbar (drop zone) and the
+ * MenuPanel (drag source) can share it. Created via [rememberToolbarDragState]
+ * and remembered across recompositions.
+ *
  * @param keyHeightDp       Per-row height in dp. Driven by the user's Appearance
  *                          setting (compact / normal / tall).
  * @param longPressAccents  When true, long-pressing a Latin letter key opens
  *                          an accent popup (é, ñ, ü, …) above that key. When
  *                          false, long-press does nothing.
+ * @param toolbarItems      The user's pinned toolbar items (NOT including the
+ *                          fixed Voice + Menu slots).
  */
 @Composable
 fun KeyboardScreen(
@@ -118,11 +133,15 @@ fun KeyboardScreen(
     modifier: Modifier = Modifier,
     keyHeightDp: Int = 46,
     longPressAccents: Boolean = false,
+    toolbarItems: List<ToolbarItemKind> = ToolbarItemKind.DEFAULT_TOOLBAR,
 ) {
     // Active accent popup state. Null = no popup.
     // Holds the long-pressed [Key] and the on-screen bounds (px) of that key
     // so the popup can be positioned above it.
     var accentPopup by remember { mutableStateOf<AccentPopupState?>(null) }
+
+    // Shared drag state for toolbar ↔ menu panel drag-and-drop.
+    val dragState = rememberToolbarDragState()
 
     Surface(
         modifier = modifier
@@ -130,48 +149,93 @@ fun KeyboardScreen(
             .wrapContentHeight(align = Alignment.Top),
         color = MaterialTheme.colorScheme.surface,
     ) {
-        // The accent popup is a separate window (Compose Popup), so touches
-        // on the keyboard are handled by Popup's dismissOnClickOutside when
-        // the popup is showing — we don't need a scrim here.
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-            ) {
-                val rows = keyboardLayoutFor(state.layout)
-                for (row in rows) {
-                    KeyRowView(
-                        row = row,
-                        state = state,
-                        onAction = onAction,
-                        keyHeightDp = keyHeightDp,
-                        longPressAccents = longPressAccents,
-                        onLongPressKey = { key, bounds ->
-                            if (longPressAccents && AccentMap.hasAccents(key.label)) {
-                                accentPopup = AccentPopupState(
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            // ── Toolbar (always visible) ──────────────────────────────────────
+            Toolbar(
+                items = toolbarItems,
+                dragState = dragState,
+                isMenuOpen = state.layout == LayoutKind.Menu,
+                onAction = onAction,
+            )
+
+            // ── Body (keyboard layout OR menu panel) ──────────────────────────
+            if (state.layout == LayoutKind.Menu) {
+                MenuPanel(
+                    activeItems = toolbarItems,
+                    dragState = dragState,
+                    onAction = onAction,
+                )
+            } else {
+                KeyboardBody(
+                    state = state,
+                    onAction = onAction,
+                    keyHeightDp = keyHeightDp,
+                    longPressAccents = longPressAccents,
+                    onAccentPopupChange = { accentPopup = it },
+                )
+            }
+        }
+
+        // Accent popup overlay — rendered on top of everything via Popup.
+        // Lives outside the Column so it can float above any layout.
+        accentPopup?.let { popup ->
+            AccentPopup(
+                state = popup,
+                shiftUppercase = state.shift.uppercase,
+                onAccent = { accent ->
+                    onAction(KeyAction.InsertText(accent))
+                    accentPopup = null
+                },
+                onDismiss = { accentPopup = null },
+            )
+        }
+    }
+}
+
+/**
+ * The keyboard body — the rows of keys, excluding the toolbar.
+ *
+ * Extracted from [KeyboardScreen] so the menu panel can replace just the
+ * body without affecting the toolbar.
+ */
+@Composable
+private fun KeyboardBody(
+    state: KeyboardUiState,
+    onAction: (KeyAction) -> Unit,
+    keyHeightDp: Int,
+    longPressAccents: Boolean,
+    onAccentPopupChange: (AccentPopupState?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+        ) {
+            val rows = keyboardLayoutFor(state.layout)
+            for (row in rows) {
+                KeyRowView(
+                    row = row,
+                    state = state,
+                    onAction = onAction,
+                    keyHeightDp = keyHeightDp,
+                    longPressAccents = longPressAccents,
+                    onLongPressKey = { key, bounds ->
+                        if (longPressAccents && AccentMap.hasAccents(key.label)) {
+                            onAccentPopupChange(
+                                AccentPopupState(
                                     baseChar = key.label[0],
                                     bounds = bounds,
                                 )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-
-            // Accent popup overlay. Rendered on top of the key grid via Popup
-            // so it floats above the keyboard without pushing layout.
-            accentPopup?.let { popup ->
-                AccentPopup(
-                    state = popup,
-                    shiftUppercase = state.shift.uppercase,
-                    onAccent = { accent ->
-                        onAction(KeyAction.InsertText(accent))
-                        accentPopup = null
+                            )
+                        }
                     },
-                    onDismiss = { accentPopup = null },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
